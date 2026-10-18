@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>UMBRA</title>
+    <meta name="description" content="UMBRA — a two-player volcanic escape. Pyre's shadow is the only bridge Umbra can cross.">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='22' fill='%23ffc04a'/%3E%3Cpath d='M10 32a22 22 0 0 0 44 0z' fill='%235a3cc8'/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Lilita+One&display=swap">
+    <style>
+           /* ------------------------------------------------------------------
+        UMBRA — page shell and HUD. game.js draws the 3D world into #game
+        and writes live values into the elements with ids below.
+        ------------------------------------------------------------------ */
+           :root {
+               --basalt: #1b1220;
+               --basalt-hi: #2b1e34;
+               --ash: #f1e9f7;
+               --ash-dim: #b7a6c6;
+               --ember: #ff8a3a;
+               --rune: #45eeff;
+               --sun: #ffc04a;
+               --dusk: #7a5cff;
+               --display: 'Lilita One', 'Arial Rounded MT Bold', 'Trebuchet MS', system-ui, sans-serif;
+               --text: 'Baloo 2', 'Segoe UI', system-ui, sans-serif;
+               --gap: clamp(8px, 1.1vw, 14px);
+           }
+
+           * {
+               box-sizing: border-box;
+           }
+
+           html, body {
+               margin: 0;
+               height: 100%;
+               overflow: hidden;
+               background: #160a12;
+               color: var(--ash);
+               font-family: var(--text);
+               -webkit-font-smoothing: antialiased;
+           }
+
+           /* the 3D view fills the window; everything else floats above it */
+           #game {
+               position: fixed;
+               inset: 0;
+               z-index: 0;
+           }
+
+           /* carved basalt slab: lit top edge, hard dark base like a stone tablet */
+           .slab {
+               background: linear-gradient(180deg, rgba(43, 30, 52, 0.93), rgba(27, 18, 32, 0.93));
+               border: 1px solid rgba(122, 92, 255, 0.26);
+               border-radius: 10px;
+               box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 -2px 0 rgba(0, 0, 0, 0.35), 0 4px 0 rgba(10, 4, 14, 0.55);
+           }
+
+           .hud, .hud-gate {
+               pointer-events: none;
+           }
+
+           .lbl {
+               display: block;
+               font: 600 12px/1 var(--text);
+               color: var(--ash-dim);
+               letter-spacing: 0.02em;
+           }
+
+           .val {
+               display: block;
+               margin-top: 5px;
+               font: 400 19px/1.05 var(--display);
+               letter-spacing: 0.03em;
+               text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+               white-space: nowrap;
+           }
+
+           /* ---------- top left: time and the three live states ---------- */
+           .hud-top {
+               position: fixed;
+               top: var(--gap);
+               left: var(--gap);
+               z-index: 10;
+               display: flex;
+               gap: 8px;
+               align-items: stretch;
+           }
+
+               .hud-top .slab {
+                   padding: 9px 13px 10px;
+               }
+
+           .slab-time {
+               border-radius: 14px;
+               padding: 8px 16px 9px !important;
+           }
+
+           .time {
+               display: block;
+               margin-top: 3px;
+               font: 400 34px/1 var(--display);
+               color: var(--sun);
+               letter-spacing: 0.02em;
+               text-shadow: 0 3px 0 #2a1406, 0 0 18px rgba(255, 192, 74, 0.32);
+           }
+
+           .chip {
+               min-width: 104px;
+           }
+           /* a small diamond rune in the state colour (game.js sets the colour) */
+           #shadowState::before, #lockState::before {
+               content: '';
+               display: inline-block;
+               width: 8px;
+               height: 8px;
+               margin: 0 7px 2px 1px;
+               vertical-align: middle;
+               transform: rotate(45deg);
+               background: currentColor;
+               box-shadow: 0 0 8px currentColor;
+           }
+
+           #shardState {
+               color: var(--sun);
+           }
+
+           /* ---------- top right: the route, with a notch at each real gate ---------- */
+           .hud-gate {
+               position: fixed;
+               top: var(--gap);
+               right: var(--gap);
+               z-index: 10;
+               width: min(340px, 34vw);
+               padding: 9px 13px 12px;
+           }
+
+           .gate-name {
+               display: block;
+               font: 400 15px/1.2 var(--display);
+               letter-spacing: 0.03em;
+               text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+               white-space: nowrap;
+               overflow: hidden;
+               text-overflow: ellipsis;
+           }
+
+           .track {
+               position: relative;
+               height: 10px;
+               margin-top: 8px;
+               border-radius: 5px;
+               background: rgba(0, 0, 0, 0.45);
+               box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+               overflow: hidden;
+           }
+
+           #progressFill {
+               height: 100%;
+               width: 0;
+               background: var(--sun);
+               box-shadow: 0 0 10px rgba(255, 192, 74, 0.6);
+               transition: width 0.4s ease;
+           }
+
+           .track i {
+               position: absolute;
+               top: 0;
+               bottom: 0;
+               width: 2px;
+               margin-left: -1px;
+               background: rgba(241, 233, 247, 0.6);
+           }
+
+           /* ---------- bottom: what to do now, and each player's keys ---------- */
+           .hud-bottom {
+               position: fixed;
+               left: var(--gap);
+               right: var(--gap);
+               bottom: var(--gap);
+               z-index: 10;
+               display: grid;
+               grid-template-columns: 1fr minmax(0, 760px) 1fr;
+               gap: var(--gap);
+               align-items: end;
+           }
+
+           .brief {
+               padding: 10px 18px 11px;
+               text-align: center;
+           }
+
+           #hint {
+               margin: 0;
+               font: 700 16px/1.35 var(--text);
+               color: var(--ash);
+           }
+
+           #objective {
+               margin: 3px 0 0;
+               font: 600 13.5px/1.35 var(--text);
+               color: var(--ash-dim);
+           }
+
+           .keys {
+               padding: 8px 12px 9px;
+               border-radius: 8px;
+               background: rgba(18, 10, 23, 0.74);
+               font: 600 13px/1.25 var(--text);
+               color: var(--ash-dim);
+           }
+
+           .keys-p1 {
+               justify-self: start;
+               border-left: 3px solid var(--ember);
+           }
+
+           .keys-p2 {
+               justify-self: end;
+               border-right: 3px solid var(--rune);
+               text-align: right;
+           }
+
+           .keys .who {
+               display: block;
+               margin-bottom: 4px;
+               font: 400 15px/1 var(--display);
+               letter-spacing: 0.03em;
+           }
+
+           .keys-p1 .who {
+               color: var(--ember);
+           }
+
+           .keys-p2 .who {
+               color: var(--rune);
+           }
+
+           .keys div + div {
+               margin-top: 3px;
+           }
+
+           kbd {
+               display: inline-block;
+               min-width: 20px;
+               padding: 3px 6px 4px;
+               border-radius: 5px;
+               background: #3a2a46;
+               color: var(--ash);
+               font: 400 12px/1 var(--display);
+               letter-spacing: 0.03em;
+               text-align: center;
+               box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.45), 0 1px 0 rgba(255, 255, 255, 0.06);
+           }
+
+           /* ---------- event messages ---------- */
+           #toast {
+               position: fixed;
+               left: 50%;
+               top: calc(var(--gap) + 78px);
+               z-index: 20;
+               max-width: min(92vw, 720px);
+               padding: 10px 18px 11px;
+               border: 2px solid var(--dusk);
+               border-radius: 12px;
+               background: rgba(18, 10, 23, 0.92);
+               box-shadow: 0 4px 0 rgba(10, 4, 14, 0.6);
+               font: 400 17px/1.25 var(--display);
+               letter-spacing: 0.03em;
+               text-align: center;
+               color: var(--ash);
+               text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6);
+               opacity: 0;
+               transform: translate(-50%, -6px);
+               transition: opacity 0.18s ease, transform 0.18s ease;
+               pointer-events: none;
+           }
+
+               #toast.show {
+                   transform: translate(-50%, 0);
+               }
+
+           /* ---------- start / pause / end screen ---------- */
+           #startOverlay {
+               position: fixed;
+               inset: 0;
+               z-index: 40;
+               display: flex;
+               align-items: center;
+               justify-content: center;
+               padding: 24px;
+               background: radial-gradient(ellipse at 50% 42%, rgba(32, 14, 36, 0.5), rgba(10, 4, 12, 0.9) 70%);
+               -webkit-backdrop-filter: blur(3px);
+               backdrop-filter: blur(3px);
+           }
+
+               #startOverlay.hidden {
+                   display: none;
+               }
+
+           .overlay-card {
+               width: min(700px, 100%);
+               text-align: center;
+           }
+           /* the title is lit by the sun on top and falls into shadow below,
+        with the long cast shadow of Pyre's bridge */
+           #overlayTitle {
+               margin: 0 0 8px;
+               font: 400 clamp(54px, 12vw, 138px)/0.95 var(--display);
+               letter-spacing: 0.06em;
+               background: linear-gradient(180deg, #fff1c4 0%, #ffc04a 28%, #ff7a2a 49.4%, #2b1d52 50.6%, #5a3cc8 74%, #45eeff 100%);
+               -webkit-background-clip: text;
+               background-clip: text;
+               color: transparent;
+               filter: drop-shadow(6px 8px 0 #12081c) drop-shadow(0 0 30px rgba(255, 138, 58, 0.26));
+           }
+
+           #overlayText {
+               max-width: 60ch;
+               margin: 0 auto;
+               font: 600 17px/1.55 var(--text);
+               color: #e6dbef;
+           }
+
+               #overlayText > b {
+                   color: var(--sun);
+                   font-weight: 800;
+               }
+
+               #overlayText span > b {
+                   font-weight: 800;
+               }
+
+               #overlayText .umbra-overlay-keys {
+                   display: inline-grid;
+                   grid-template-columns: auto auto;
+                   gap: 7px 18px;
+                   margin: 18px auto 0;
+                   padding: 14px 18px;
+                   border-radius: 12px;
+                   background: rgba(18, 10, 23, 0.6);
+                   text-align: left;
+                   font: 600 15px/1.3 var(--text);
+               }
+
+                   #overlayText .umbra-overlay-keys b {
+                       font: 400 15px/1.3 var(--display);
+                       letter-spacing: 0.04em;
+                       color: var(--ember);
+                   }
+
+                       #overlayText .umbra-overlay-keys .u, #overlayText .umbra-overlay-keys b.u {
+                           color: var(--rune);
+                       }
+
+           #startButton {
+               margin-top: 24px;
+               padding: 14px 36px 16px;
+               border: 0;
+               border-radius: 14px;
+               background: linear-gradient(180deg, #ffd36a, #ff9a3a);
+               box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55), 0 6px 0 #a8460f, 0 10px 18px rgba(0, 0, 0, 0.35);
+               color: #2a1206;
+               font: 400 22px/1 var(--display);
+               letter-spacing: 0.05em;
+               text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+               cursor: pointer;
+               transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease;
+           }
+
+               #startButton:hover {
+                   filter: brightness(1.06);
+               }
+
+               #startButton:active {
+                   transform: translateY(4px);
+                   box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.55), 0 2px 0 #a8460f, 0 4px 10px rgba(0, 0, 0, 0.35);
+               }
+
+               #startButton:focus-visible {
+                   outline: 3px solid var(--rune);
+                   outline-offset: 4px;
+               }
+
+           .noscript {
+               position: fixed;
+               inset: 0;
+               z-index: 50;
+               display: grid;
+               place-items: center;
+               background: #160a12;
+               font: 700 18px/1.4 var(--text);
+           }
+
+           /* ---------- smaller windows ---------- */
+           @media (max-width: 1100px) {
+               .keys {
+                   display: none;
+               }
+
+               .hud-bottom {
+                   grid-template-columns: 1fr;
+               }
+
+               .brief {
+                   justify-self: center;
+                   max-width: 760px;
+               }
+           }
+
+           @media (max-width: 760px) {
+               .hud-top {
+                   gap: 6px;
+               }
+
+                   .hud-top .slab {
+                       padding: 7px 9px 8px;
+                   }
+
+               .chip {
+                   min-width: 0;
+               }
+
+               .val {
+                   font-size: 15px;
+               }
+
+               .time {
+                   font-size: 26px;
+               }
+
+               .hud-gate {
+                   top: calc(var(--gap) + 64px);
+                   left: var(--gap);
+                   right: auto;
+                   width: min(340px, calc(100vw - 2 * var(--gap)));
+               }
+
+               #toast {
+                   top: calc(var(--gap) + 128px);
+                   font-size: 15px;
+               }
+
+               #hint {
+                   font-size: 14.5px;
+               }
+           }
+
+           /* big screens and projectors: a size step up so the HUD reads from a distance */
+           @media (min-width: 1600px) and (min-height: 860px) {
+               .lbl {
+                   font-size: 13.5px;
+               }
+
+               .val {
+                   font-size: 23px;
+               }
+
+               .time {
+                   font-size: 42px;
+               }
+
+               .chip {
+                   min-width: 124px;
+               }
+
+               .hud-gate {
+                   width: min(400px, 30vw);
+               }
+
+               .gate-name {
+                   font-size: 18px;
+               }
+
+               .track {
+                   height: 12px;
+               }
+
+               #hint {
+                   font-size: 19px;
+               }
+
+               #objective {
+                   font-size: 15.5px;
+               }
+
+               .keys {
+                   font-size: 14.5px;
+               }
+
+                   .keys .who {
+                       font-size: 17px;
+                   }
+
+               kbd {
+                   font-size: 13.5px;
+               }
+
+               #toast {
+                   top: calc(var(--gap) + 92px);
+                   font-size: 20px;
+               }
+           }
+
+           @media (prefers-reduced-motion: reduce) {
+               #toast, #progressFill, #startButton {
+                   transition: none;
+               }
+
+               #timer.umbra-urgent {
+                   animation: none;
+               }
+           }
+    </style>
+</head>
+<body>
+    <div id="game" aria-label="UMBRA game view"></div>
+
+    <header class="hud hud-top">
+        <div class="slab slab-time">
+            <span class="lbl">Time left</span>
+            <span id="timer" class="time">2:30</span>
+        </div>
+        <div class="slab chip">
+            <span class="lbl">Shadow</span>
+            <span id="shadowState" class="val">UNSTABLE</span>
+        </div>
+        <div class="slab chip">
+            <span class="lbl">Shadow lock</span>
+            <span id="lockState" class="val">READY</span>
+        </div>
+        <div class="slab chip">
+            <span class="lbl">Sun shards</span>
+            <span id="shardState" class="val">0 / 6</span>
+        </div>
+    </header>
+
+    <section class="slab hud-gate" aria-label="Route">
+        <span id="progressText" class="gate-name">Gate 1 / 6</span>
+        <div class="track" aria-hidden="true">
+            <div id="progressFill"></div>
+            <!-- one notch at each of the six lava gates, placed at their real distance along the route -->
+            <i style="left: 7.9%"></i><i style="left: 24.8%"></i><i style="left: 40.6%"></i>
+            <i style="left: 58.6%"></i><i style="left: 72.5%"></i><i style="left: 85.7%"></i>
+        </div>
+    </section>
+
+    <footer class="hud hud-bottom">
+        <div class="keys keys-p1" aria-label="Player 1 controls">
+            <span class="who">Pyre</span>
+            <div><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> move</div>
+            <div><kbd>Space</kbd> shadow lock</div>
+            <div><kbd>E</kbd> solar burst, from gate 5</div>
+        </div>
+        <div class="slab brief">
+            <p id="hint">Press Enter or click Start run.</p>
+            <p id="objective">Six lava gates stand between you and the exit.</p>
+        </div>
+        <div class="keys keys-p2" aria-label="Player 2 controls">
+            <span class="who">Umbra</span>
+            <div>move <kbd>←</kbd> <kbd>↑</kbd> <kbd>↓</kbd> <kbd>→</kbd></div>
+            <div>dash <kbd>Right Shift</kbd></div>
+        </div>
+    </footer>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <div id="startOverlay" role="dialog" aria-modal="true" aria-labelledby="overlayTitle">
+        <div class="overlay-card">
+            <h1 id="overlayTitle">UMBRA</h1>
+            <div id="overlayText">Loading the volcanic temple…</div>
+            <button id="startButton" type="button">Start run</button>
+        </div>
+    </div>
+
+    <noscript><div class="noscript">UMBRA needs JavaScript. Turn it on and reload the page.</div></noscript>
+
+    <!-- A plain deferred script (not type="module") so the game also runs when you
+         open this file straight from disk. game.js loads Three.js by itself. -->
+    <script src="game.js" defer></script>
+</body>
+</html>
