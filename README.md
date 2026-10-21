@@ -36,7 +36,6 @@
 * ⌨️ **Shared Screen Local Co-op:** Designed specifically for two players sharing one keyboard and screen.
 * 🗺️ **Two Complete Realms:**
   * *Level 1: The Volcanic Temple* - Master the tail-escort and freeze mechanics across 6 distinct gates.
-  * *Level 2: The Obsidian Citadel* - Survive sinking basalt islands, magma geysers, dual-seal locks, and defeat **Ignis-Sol, The Eclipse Colossus**.
 * 🎨 **Zero External Assets:** Features realistic procedural flowing lava shaders and a Web Audio API synthesizer built entirely from scratch.
 
 ---
