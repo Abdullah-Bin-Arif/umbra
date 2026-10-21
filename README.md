@@ -66,5 +66,20 @@
 ## 🚀 How to Run Locally
 
 1. **Clone the repository:**
+
    ```bash
-   git clone [https://github.com/Abdullah-Bin-Arif/umbra.git](https://github.com/Abdullah-Bin-Arif/umbra.git)
+   git clone https://github.com/Abdullah-Bin-Arif/umbra.git
+   cd umbra
+   ```
+
+2. **Start a local server using Python:**
+
+   ```bash
+   python3 -m http.server
+   ```
+
+   On Windows, use `python` instead of `python3` if needed.
+
+3. **Open the project in your browser:**
+
+   Visit [http://localhost:8000](http://localhost:8000).
